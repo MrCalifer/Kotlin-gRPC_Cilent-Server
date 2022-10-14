@@ -9,14 +9,14 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import java.util.concurrent.Executors
 
 class HelloServer(private val port: Int) {
-    val server: Server = ServerBuilder
+    private val server: Server = ServerBuilder
         .forPort(port)
         .addService(HelloService())
         .build()
 
     fun start() {
         server.start()
-        println("*** Server started, listening on $port ***")
+        println("*** Server started, listening on $port*** $server")
         Runtime.getRuntime().addShutdownHook(
             Thread {
                 this@HelloServer.stop()
@@ -38,9 +38,13 @@ class HelloServer(private val port: Int) {
         coroutineContext = Executors.newFixedThreadPool(1).asCoroutineDispatcher()
     ) {
         override suspend fun sayHello(request: Request): Response {
-            return Response.newBuilder()
+            println("request for: ${request.name}")
+
+            val response = Response.newBuilder()
                 .setMessage("Response to "+request.name)
                 .build()
+            println("response to: ${request.name} is $response")
+            return response
         }
     }
 }

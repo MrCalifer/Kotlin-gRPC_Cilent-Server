@@ -1,87 +1,98 @@
 package edu.califer.kotlin_grpc.android
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import edu.califer.kotlin_grpc.Greeting
-
-@Composable
-fun MyApplicationTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
-) {
-    val colors = if (darkTheme) {
-        darkColors(
-            primary = Color(0xFFBB86FC),
-            primaryVariant = Color(0xFF3700B3),
-            secondary = Color(0xFF03DAC5)
-        )
-    } else {
-        lightColors(
-            primary = Color(0xFF6200EE),
-            primaryVariant = Color(0xFF3700B3),
-            secondary = Color(0xFF03DAC5)
-        )
-    }
-    val typography = Typography(
-        body1 = TextStyle(
-            fontFamily = FontFamily.Default,
-            fontWeight = FontWeight.Normal,
-            fontSize = 16.sp
-        )
-    )
-    val shapes = Shapes(
-        small = RoundedCornerShape(4.dp),
-        medium = RoundedCornerShape(4.dp),
-        large = RoundedCornerShape(0.dp)
-    )
-
-    MaterialTheme(
-        colors = colors,
-        typography = typography,
-        shapes = shapes,
-        content = content
-    )
-}
+import edu.califer.protos.GreeterGrpcKt
+import edu.califer.protos.Request
+import io.grpc.ManagedChannelBuilder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
+import kotlinx.coroutines.launch
+import java.io.Closeable
 
 class MainActivity : ComponentActivity() {
+    private val uri by lazy { Uri.parse((resources.getString(R.string.server_url))) }
+    private val greeterService by lazy { GreeterRCP(uri) }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MyApplicationTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colors.background
-                ) {
-                    Greeting(Greeting().greeting())
-                }
+            Surface(color = MaterialTheme.colors.background) {
+                Greeter(greeterService)
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        greeterService.close()
+    }
+}
+
+class GreeterRCP(uri: Uri) : Closeable {
+    val responseState = mutableStateOf("")
+
+    private val channel = let {
+        println("Connecting to ${uri.host}:${uri.port}")
+        val builder = ManagedChannelBuilder.forAddress(uri.host, uri.port)
+        if (uri.scheme == "https") {
+            builder.useTransportSecurity()
+        } else {
+            builder.usePlaintext()
+        }
+        builder.executor(Dispatchers.IO.asExecutor()).build()
+    }
+
+
+    private val greeter = GreeterGrpcKt.GreeterCoroutineStub(channel)
+    suspend fun sayHello(name: String) {
+        try {
+            val request = Request.newBuilder().setName(name).build()
+            val response = greeter.sayHello(request)
+            responseState.value = response.message
+        } catch (e: Exception) {
+            responseState.value = e.message ?: "Unknown Error"
+            e.printStackTrace()
+        }
+    }
+
+    override fun close() {
+        channel.shutdownNow()
     }
 }
 
 @Composable
-fun Greeting(text: String) {
-    Text(text = text)
-}
-
-@Preview
-@Composable
-fun DefaultPreview() {
-    MyApplicationTheme {
-        Greeting("Hello, Android!")
+fun Greeter(greeterRCP: GreeterRCP) {
+    val scope = rememberCoroutineScope()
+    val nameState = remember { mutableStateOf(TextFieldValue()) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(), Arrangement.Top, Alignment.CenterHorizontally
+    ) {
+        Text(stringResource(R.string.name_hint), modifier = Modifier.padding(top = 10.dp))
+        OutlinedTextField(nameState.value, { nameState.value = it })
+        Button(
+            { scope.launch { greeterRCP.sayHello(nameState.value.text) } },
+            Modifier.padding(10.dp)
+        ) {
+            Text(stringResource(R.string.send_request))
+        }
+        if (greeterRCP.responseState.value.isNotEmpty()) {
+            Text(stringResource(R.string.server_response), modifier = Modifier.padding(top = 10.dp))
+            Text(greeterRCP.responseState.value)
+        }
     }
 }
