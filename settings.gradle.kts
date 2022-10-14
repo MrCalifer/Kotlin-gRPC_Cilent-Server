@@ -17,3 +17,5 @@ rootProject.name = "Kotlin-gRPC"
 include(":androidApp")
 include(":shared")
 include(":protos")
+include(":stub")
+include(":server")

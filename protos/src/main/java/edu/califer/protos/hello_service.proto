@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option java_multiple_files=true;
+option java_package = "edu.califer.protos";
+option java_outer_classname = "HelloWorldService";
+
+// The greeting service definition.
+service Greeter {
+  //Sending a greeting
+  rpc SayHello (Request) returns (Response) {}
+}
+
+// The request message containing the user's name.
+message Request{
+  string name = 1;
+}
+
+// The response message containing the greetings
+message Response{
+  string message = 1;
+  bool received = 2;
+}
