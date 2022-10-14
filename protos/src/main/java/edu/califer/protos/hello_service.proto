@@ -8,6 +8,7 @@ option java_outer_classname = "HelloWorldService";
 service Greeter {
   //Sending a greeting
   rpc SayHello (Request) returns (Response) {}
+
 }
 
 // The request message containing the user's name.
